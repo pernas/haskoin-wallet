@@ -78,6 +78,7 @@ runServer = do
     bloom <- runDB mvar $ do
         _ <- runMigrationSilent migrateWallet 
         initWalletDB
+        insertTickerDB
         walletBloomFilter fp
 
     -- Launch SPV node

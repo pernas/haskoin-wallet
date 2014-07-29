@@ -9,15 +9,22 @@ module Network.Haskoin.Wallet.Root
 , newWalletMnemo
 , newWallet
 , initWalletDB
+, insertTickerDB
 ) where
 
+import Control.Applicative ((<$>),(<*>))
 import Control.Monad (liftM, when)
 import Control.Exception (throwIO)
 import Control.Monad.Trans (liftIO)
-
+import Network.HTTP.Conduit (simpleHttp)
 import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Time (getCurrentTime)
 import qualified Data.ByteString as BS
+import Data.ByteString.Lazy (ByteString)
+import Data.Aeson( decode )
+import qualified Data.Text as T
+import qualified Data.HashMap.Strict as M
+import Control.Monad.Trans (MonadIO)
 
 import Database.Persist
     ( PersistUnique
@@ -27,6 +34,7 @@ import Database.Persist
     , Entity(..)
     , getBy
     , insert_
+    , insertMany
     , selectList
     , selectFirst
     , entityVal
@@ -128,3 +136,18 @@ initWalletDB = do
         time <- liftIO getCurrentTime
         insert_ $ DbConfig 0 1 time
 
+insertTickerDB :: PersistQuery m => m ()
+insertTickerDB = do
+    tickersHM <- liftIO ticker
+    let tickersL = M.toList $ fromJust tickersHM  
+    let dbtickers = map t tickersL
+    _ <- insertMany dbtickers
+    return ()
+  where
+    t (k,Ticker a b c d (Just e) f) = DbTicker (T.unpack k) a b c d e f
+
+ticker::(MonadIO m) => m (Maybe (M.HashMap T.Text Ticker))
+ticker = getBitcoinAverage >>= return . decode
+
+getBitcoinAverage::(MonadIO m) => m ByteString
+getBitcoinAverage = simpleHttp $ "https://api.bitcoinaverage.com/ticker/all"

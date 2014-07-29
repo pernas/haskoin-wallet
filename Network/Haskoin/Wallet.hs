@@ -12,6 +12,7 @@ module Network.Haskoin.Wallet
 , newWalletMnemo
 , newWallet
 , walletList
+, insertTickerDB
 
 -- *Account Commands
 , Account(..)

@@ -18,6 +18,7 @@ module Network.Haskoin.Wallet.Model
 , DbConfirmationGeneric(..)
 , DbConfigGeneric(..)
 , DbSpentCoinGeneric(..)
+, DbTickerGeneric(..)
 , DbWalletId
 , DbAccountId
 , DbAddressId
@@ -26,6 +27,7 @@ module Network.Haskoin.Wallet.Model
 , DbTxId
 , DbTxConflictId
 , DbSpentCoinId
+, DbTicker
 , DbConfirmationId
 , DbConfigId
 , DbOrphanId
@@ -148,5 +150,15 @@ DbConfig
     version Int
     created UTCTime default=CURRENT_TIME
     deriving Show
-|]
 
+DbTicker
+    currency String
+    avg24 Double
+    ask Double
+    bid Double
+    last Double
+    stamp UTCTime
+    vol Double
+    UniqueTickerKey currency stamp
+    deriving Show
+|]

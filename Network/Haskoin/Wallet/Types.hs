@@ -19,21 +19,29 @@ module Network.Haskoin.Wallet.Types
 , printAccount
 , printAddress
 , printAccTx
+, Ticker(..)
 ) where
 
-import Control.Monad (mzero, liftM2)
+
+import Data.Time.Format     (parseTime)
+import Data.Time.Clock      (UTCTime)
+import System.Locale        (defaultTimeLocale)
+import Control.Monad (mzero, liftM, liftM2)
 import Control.Exception (Exception)
+import Control.Applicative ((<$>),(<*>))
 
 import Data.Int (Int64)
 import Data.Typeable (Typeable)
 import qualified Data.Text as T
+import qualified Data.HashMap.Strict as M
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import Data.ByteString.Lazy (toStrict, fromStrict)
+import Data.ByteString.Lazy (ByteString, toStrict, fromStrict)
 import Data.Aeson
     ( Value (Object, String)
     , FromJSON
     , ToJSON
     , withText
+    , withObject
     , (.=)
     , (.:)
     , object
@@ -42,7 +50,6 @@ import Data.Aeson
     , encode
     , decode
     )
-
 import Database.Persist.Class
     ( PersistField
     , toPersistValue
@@ -437,3 +444,30 @@ instance PersistField Tx where
 instance PersistFieldSql Tx where
     sqlType _ = SqlBlob
 
+data Ticker = Ticker
+    { getAvg24    :: Double
+    , getAsk      :: Double
+    , getBid      :: Double
+    , getLast     :: Double
+    , getTime     :: Maybe UTCTime
+    , getVol      :: Double
+    } deriving (Show, Eq)
+
+instance FromJSON Ticker where
+    parseJSON (Object o) =
+      Ticker                                  <$>
+        (o .: "24h_avg")                      <*>
+        (o .: "ask")                          <*>
+        (o .: "bid")                          <*>
+        (o .: "last")                         <*>
+        liftM parseDate (o .: "timestamp")    <*>
+        (o .: "total_vol")
+    parseJSON _ = mzero
+    
+instance FromJSON (M.HashMap T.Text Ticker) where
+  parseJSON = withObject "tickers" $ \o -> M.traverseWithKey f (g o) where
+      f _ = parseJSON
+      g = M.delete "timestamp"
+
+parseDate :: String -> Maybe UTCTime
+parseDate = parseTime defaultTimeLocale "%a, %d %b %Y %T %z"
