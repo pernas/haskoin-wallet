@@ -11,6 +11,7 @@ import Control.Monad
 import Control.Monad.Trans 
 import Control.Monad.Trans.Resource
 import Control.Monad.Logger
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM.TBMChan
 import Control.Concurrent.STM
 import Control.Concurrent.MVar
@@ -78,9 +79,10 @@ runServer = do
     bloom <- runDB mvar $ do
         _ <- runMigrationSilent migrateWallet 
         initWalletDB
-        insertTickerDB
         walletBloomFilter fp
 
+    _ <- async (runTicker mvar)
+    
     -- Launch SPV node
     withAsyncNode dir batch $ \eChan rChan _ -> do
         let eventPipe = sourceTBMChan eChan $$ processNodeEvents mvar rChan fp
@@ -231,3 +233,9 @@ getWorkDir = do
     createDirectoryIfMissing True dir
     return dir
 
+runTicker :: MVar Connection -> IO ()
+runTicker mv = do
+    _ <- try (runDB mv $ insertTickerDB) :: IO (Either SomeException ())
+    let delay = 1000000 * 900 -- 15 min
+    threadDelay delay
+    runTicker mv

@@ -144,7 +144,7 @@ insertTickerDB = do
     _ <- insertMany dbtickers
     return ()
   where
-    t (k,Ticker a b c d (Just e) f) = DbTicker (T.unpack k) a b c d e f
+    t (k,Ticker a b c d e f) = DbTicker (T.unpack k) a b c d e f
 
 ticker::(MonadIO m) => m (Maybe (M.HashMap T.Text Ticker))
 ticker = getBitcoinAverage >>= return . decode

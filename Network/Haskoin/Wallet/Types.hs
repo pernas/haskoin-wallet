@@ -26,7 +26,7 @@ module Network.Haskoin.Wallet.Types
 import Data.Time.Format     (parseTime)
 import Data.Time.Clock      (UTCTime)
 import System.Locale        (defaultTimeLocale)
-import Control.Monad (mzero, liftM, liftM2)
+import Control.Monad (MonadPlus, mzero, liftM2)
 import Control.Exception (Exception)
 import Control.Applicative ((<$>),(<*>))
 
@@ -35,7 +35,7 @@ import Data.Typeable (Typeable)
 import qualified Data.Text as T
 import qualified Data.HashMap.Strict as M
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import Data.ByteString.Lazy (ByteString, toStrict, fromStrict)
+import Data.ByteString.Lazy (toStrict, fromStrict)
 import Data.Aeson
     ( Value (Object, String)
     , FromJSON
@@ -449,7 +449,7 @@ data Ticker = Ticker
     , getAsk      :: Double
     , getBid      :: Double
     , getLast     :: Double
-    , getTime     :: Maybe UTCTime
+    , getTime     :: UTCTime
     , getVol      :: Double
     } deriving (Show, Eq)
 
@@ -460,7 +460,7 @@ instance FromJSON Ticker where
         (o .: "ask")                          <*>
         (o .: "bid")                          <*>
         (o .: "last")                         <*>
-        liftM parseDate (o .: "timestamp")    <*>
+        (parseDate =<< (o .: "timestamp"))    <*>
         (o .: "total_vol")
     parseJSON _ = mzero
     
@@ -469,5 +469,7 @@ instance FromJSON (M.HashMap T.Text Ticker) where
       f _ = parseJSON
       g = M.delete "timestamp"
 
-parseDate :: String -> Maybe UTCTime
-parseDate = parseTime defaultTimeLocale "%a, %d %b %Y %T %z"
+parseDate :: (MonadPlus m) => String -> m UTCTime
+parseDate y = case parseTime defaultTimeLocale "%a, %d %b %Y %T %z" y of
+    Nothing -> mzero
+    Just x -> return x
