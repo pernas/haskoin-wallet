@@ -27,10 +27,10 @@ module Network.Haskoin.Wallet.Model
 , DbTxId
 , DbTxConflictId
 , DbSpentCoinId
-, DbTicker
 , DbConfirmationId
 , DbConfigId
 , DbOrphanId
+, DbTickerId
 , EntityField(..)
 , Unique(..)
 , migrateWallet

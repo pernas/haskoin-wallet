@@ -12,7 +12,6 @@ module Network.Haskoin.Wallet.Root
 , insertTickerDB
 ) where
 
-import Control.Applicative ((<$>),(<*>))
 import Control.Monad (liftM, when)
 import Control.Exception (throwIO)
 import Control.Monad.Trans (liftIO)
