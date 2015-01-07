@@ -9,8 +9,7 @@
 module Network.Haskoin.SPV
 ( 
   -- * SPV Node running on LevelDB
-  NodeHandle
-, runNodeHandle
+  NodeSession(..)
 ) where
 
 import Control.Applicative ((<$>))
@@ -18,7 +17,7 @@ import Control.Monad (when, forM_, forM, liftM)
 import Control.Exception (SomeException(..), tryJust)
 import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
-import qualified Control.Monad.State as S (StateT, evalStateT, get)
+import qualified Control.Monad.State as S (StateT, evalStateT, get, gets)
 import Control.Monad.Logger (LoggingT, runStdoutLoggingT)
 
 import Data.Maybe (isJust, isNothing, fromJust, catMaybes)
@@ -50,17 +49,15 @@ import Network.Haskoin.Util
 import Network.Haskoin.Wallet.Tx
 import Network.Haskoin.Wallet.Types
 
-data DBSession = DBSession
+data NodeSession = NodeSession
     { chainHandle :: DB.DB
     , walletPool  :: ConnectionPool
     , bloomFP     :: Double
     }
 
-type NodeHandle = S.StateT DBSession (LoggingT (ResourceT IO))
-
-instance SPVNode LevelDBChain NodeHandle where
+instance SPVNode LevelDBChain NodeSession where
     runHeaderChain s = do
-        db <- liftM chainHandle $ lift $ lift $ S.get
+        db <- chainHandle <$> S.gets spvData
         resE <- liftIO $ tryJust f $ runLevelDBChain db s
         case resE of
             Left err -> liftIO (print err) >> undefined
@@ -69,8 +66,8 @@ instance SPVNode LevelDBChain NodeHandle where
         f (SomeException e) = Just $ show e
 
     spvImportTxs txs = do
-        pool <- liftM walletPool $ lift $ lift $ S.get
-        fp <- liftM bloomFP $ lift $ lift $ S.get
+        pool <- walletPool <$> S.gets spvData
+        fp <- bloomFP <$> S.gets spvData
         resE <- liftIO $ tryJust f $ flip runSqlPersistMPool pool $ do
             xs <- forM txs $ \tx -> importTx tx NetworkSource Nothing
             -- Update the bloom filter if new addresses were generated
@@ -85,18 +82,10 @@ instance SPVNode LevelDBChain NodeHandle where
         f (SomeException e) = Just $ show e
 
     spvImportMerkleBlock mb expTxs = do
-        pool <- liftM walletPool $ lift $ lift $ S.get
+        pool <- walletPool <$> S.gets spvData
         resE <- liftIO $ tryJust f $ flip runSqlPersistMPool pool $ 
             importBlock mb expTxs
         when (isLeft resE) $ liftIO $ print $ fromLeft resE
       where
         f (SomeException e) = Just $ show e
-
-runNodeHandle :: Double -> ConnectionPool -> NodeHandle a -> IO a
-runNodeHandle fp pool m = do
-    db <- DB.open "headerchain"
-        DB.defaultOptions{ DB.createIfMissing = True
-                         , DB.cacheSize       = 2048
-                         }
-    runResourceT $ runStdoutLoggingT $ S.evalStateT m $ DBSession db pool fp
 

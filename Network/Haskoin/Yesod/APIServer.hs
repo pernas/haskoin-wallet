@@ -70,6 +70,12 @@ import Database.Persist.Sql
     , replace
     , insert_
     )
+import qualified Database.LevelDB.Base as DB 
+    ( DB
+    , Options(..)
+    , open
+    , defaultOptions 
+    )
 
 import Yesod
     ( Yesod(..)
@@ -257,24 +263,26 @@ runServer config pool = do
                 Just t  -> return t
                 Nothing -> round <$> getPOSIXTime
 
-            -- Adjust time backwards by a week to handle clock drifts.
-            let fastCatchupI = max 0 ((toInteger fstKeyTime) - 86400 * 7)
-                fc           = fromInteger fastCatchupI :: Word32
+            -- Create leveldb handle
+            db <- DB.open "headerchain"
+                DB.defaultOptions{ DB.createIfMissing = True
+                                 , DB.cacheSize       = 2048
+                                 }
 
             -- Launch SPV node
-            withAsyncSPV hosts fc (runNodeHandle fp pool) $ 
-                \rChan _ -> do
-                    -- Send the bloom filter
-                    bloom <- flip runSqlPersistMPool pool $ walletBloomFilter fp
-                    atomically $ writeTBMChan rChan $ BloomFilterUpdate bloom
-                    -- Launch the haskoin server
-                    app <- toWaiApp $ HaskoinServer
-                        { serverPool = pool
-                        , serverNode = (Just rChan)
-                        , serverConfig = config
-                        , getStatic = staticSite
-                        }
-                    runApp app
+            let session = NodeSession db pool fp
+            withAsyncSPV hosts fstKeyTime session $ \rChan _ -> do
+                -- Send the bloom filter
+                bloom <- flip runSqlPersistMPool pool $ walletBloomFilter fp
+                atomically $ writeTBMChan rChan $ BloomFilterUpdate bloom
+                -- Launch the haskoin server
+                app <- toWaiApp $ HaskoinServer
+                    { serverPool = pool
+                    , serverNode = (Just rChan)
+                    , serverConfig = config
+                    , getStatic = staticSite
+                    }
+                runApp app
 
 whenOnline :: Handler () -> Handler ()
 whenOnline handler = do
